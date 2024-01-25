@@ -1,375 +1,491 @@
 import pygame
+import sys
 import random
-from pygame import font, display
 from pygame.locals import *
-from pygame import mixer
+import pathfinding
 
-# Initialize Pygame
+
+
+
 pygame.init()
 pygame.font.init()
 
 score = 0
 score_increment = 1
-# music
-# Sound
-mixer.music.load("background.wav")
-mixer.music.play(1)
 
-# Set up the font
+pygame.mixer.music.load('2021-08-26_-_Outlaw_Beginnings_-_www.FesliyanStudios.com.mp3')
+pygame.mixer.music.play(-1)
+
 font = pygame.font.Font(None, 36)
-# Define colors
+
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
 RED = (255, 0, 0)
 
-# Define the dimensions of the window
+Beige = ((196, 164, 132))  # Beige color
+
 BOARD_SIZE = 26
 SQUARE_SIZE = 26
 BOARD_WIDTH = BOARD_SIZE * SQUARE_SIZE
 BOARD_HEIGHT = BOARD_SIZE * SQUARE_SIZE
 
-# Create the game window
 screen = pygame.display.set_mode((BOARD_WIDTH, BOARD_HEIGHT))
 pygame.display.set_caption("Dungeon Horse Breeder")
 
-# Set the game icon
 game_icon = pygame.image.load("trojan-horse.png")
 pygame.display.set_icon(game_icon)
 
-# Load the farmer.png image and resize it
+carrot_group = pygame.sprite.Group()
+horse_group = pygame.sprite.Group()  # Added horse_group
+
 farmer_image = pygame.image.load("farmer.png").convert_alpha()
-FARMER_WIDTH = 30  # Adjust the width as needed
-FARMER_HEIGHT = 30  # Adjust the height as needed
+FARMER_WIDTH = 30
+FARMER_HEIGHT = 30
 farmer_image = pygame.transform.scale(farmer_image, (FARMER_WIDTH, FARMER_HEIGHT))
 
-# Load the dungeon.png image and resize it
-dungeon_image = pygame.image.load("dungeon.png").convert_alpha()
-DUNGEON_WIDTH = 500  # Adjust the width as needed
-DUNGEON_HEIGHT = 500  # Adjust the height as needed
-dungeon_image = pygame.transform.scale(dungeon_image, (DUNGEON_WIDTH, DUNGEON_HEIGHT))
+carrot_image = pygame.image.load("carrot.png").convert_alpha()
+CARROT_WIDTH = 20
+CARROT_HEIGHT = 20
+carrot_image = pygame.transform.scale(carrot_image, (CARROT_WIDTH, CARROT_HEIGHT))
 
-# Load enemy images and resize them
+# Load the mine image
+mine_image = pygame.image.load("mine.png").convert_alpha()
+MINE_WIDTH = 200  # Adjust the width as needed
+MINE_HEIGHT = 100  # Adjust the height as needed
+mine_image = pygame.transform.scale(mine_image, (MINE_WIDTH, MINE_HEIGHT))
+
+dungeon_image = pygame.image.load("dungeon.png").convert_alpha()
+DUNGEON_WIDTH = 500
+DUNGEON_HEIGHT = 500
+dungeon_image = pygame.transform.scale(dungeon_image, (DUNGEON_WIDTH, DUNGEON_HEIGHT))
+# Load the horse pen image
+horse_pen_image = pygame.image.load("horse_pen.png").convert_alpha()
+
+# Scale the horse pen image to fit the breeding section
+HORSE_PEN_WIDTH = 50  # Adjust the width as needed
+HORSE_PEN_HEIGHT = 50  # Adjust the height as needed
+horse_pen_image = pygame.transform.scale(horse_pen_image, (HORSE_PEN_WIDTH, HORSE_PEN_HEIGHT))
+
+# Load the horse image
+horse_image = pygame.image.load("horse.png").convert_alpha()
+HORSE_WIDTH = 30
+HORSE_HEIGHT = 30
+horse_image = pygame.transform.scale(horse_image, (HORSE_WIDTH, HORSE_HEIGHT))
+
 enemy_images = [
     pygame.image.load("saatan.png").convert_alpha(),
     pygame.image.load("evil.png").convert_alpha(),
     pygame.image.load("devil.png").convert_alpha(),
-    pygame.image.load("bulldog.png").convert_alpha(),
 ]
 ENEMY_WIDTH = 30
 ENEMY_HEIGHT = 30
 for i in range(len(enemy_images)):
     enemy_images[i] = pygame.transform.scale(enemy_images[i], (ENEMY_WIDTH, ENEMY_HEIGHT))
 
-# Define the speed of the enemies
-ENEMY_SPEEDS = [.5, .1, 1.5, 1]
-
-# Define the health and of the enemies
+ENEMY_SPEEDS = [1.2, 1.3, 1.5, 1.4]
 ENEMY_HEALTH = [1, 1, 1, 1]
 
-# Create the game clock
+FARM_RAID_EVENT = pygame.event.custom_type()
+
+enemy_farm_counter = 0
+enemy_score = 0
+
+total_score = 10000  # Initialize total_score variable with your desired value
+
+
+
 clock = pygame.time.Clock()
 running = True
-
-# Limit the frame rate
 clock.tick(60)
+class Horse(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+
+        self.image = horse_image
+        self.rect = self.image.get_rect()
+        self.rect.center = (100, 100)
+        self.hunger = 0
+
+    def update(self):
+        # Implement horse behavior here
+        pass
 
 
-# Breeder
 class MainCharacter(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
 
-        # Use the resized character image
         self.image = farmer_image
-
-        # Set the character's rect (hitbox) and initial position
         self.rect = self.image.get_rect()
-        self.rect.center = (100, 100)  # Initial position (adjust as needed)
-
-        # Character attributes
+        self.rect.center = (100, 100)
         self.health = 100
         self.hunger = 0
         self.happiness = 100
-
-        # Create a timer for shooting cooldown
         self.shoot_cooldown = 0
+        self.carrot_counter = 0
+
+        # Create a horse
+        self.horse = Horse()
 
     def update(self):
-        # Add any character updates here (e.g., handling health, hunger, happiness, etc.)
-        pass
+        global score
+        enemy_collisions = pygame.sprite.spritecollide(self, enemy_group, False)
+        carrot_collisions = pygame.sprite.spritecollide(self, carrot_group, True)
+
+        for carrot in carrot_collisions:
+            self.carrot_counter += 1
+
+        for enemy in enemy_collisions:
+            score -= 1
+            self.rect.x = BOARD_WIDTH - FARMER_WIDTH - 1
+            self.rect.y = random.randint(0, BOARD_HEIGHT - FARMER_HEIGHT)
+
+        # Update the horse
+        self.horse.update()
 
     def move(self, dx, dy):
-        # Move the character by dx and dy
         new_x = self.rect.x + dx
         new_y = self.rect.y + dy
 
-        # Check if the new position is within the screen boundaries
         if 0 <= new_x <= BOARD_WIDTH - FARMER_WIDTH:
             self.rect.x = new_x
         else:
-            # If the new position would be outside the screen on the x-axis, prevent movement
             dx = 0
 
         if 0 <= new_y <= BOARD_HEIGHT - FARMER_HEIGHT:
             self.rect.y = new_y
         else:
-            # If the new position would be outside the screen on the y-axis, prevent movement
             dy = 0
+
+        # Update the horse position
+        self.horse.rect.center = (self.rect.centerx, self.rect.centery)
 
         return dx, dy
 
     def shoot(self):
-        # Shoot a projectile
         self.shoot_cooldown -= .5
         keys = pygame.key.get_pressed()
-        if keys[K_w] and self.shoot_cooldown <= 0:
-            projectile = Projectile(self.rect.centerx, self.rect.centery)
+        if keys[K_d] and self.shoot_cooldown <= 0:
+            projectile = Projectile(self.rect.centerx, self.rect.centery, in_dungeon=False)
             projectile_group.add(projectile)
-            self.shoot_cooldown = 5  # Cooldown between shots
+            self.shoot_cooldown = 5
 
+ENEMY_DIE_EVENT = pygame.event.custom_type()
 
+ENEMY_MOVE_OFFSCREEN_EVENT = pygame.event.custom_type()
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, enemy_type):
         super().__init__()
 
-        # Select enemy image based on enemy_type
         self.image = enemy_images[enemy_type]
-
-        # Set the enemy's rect (hitbox) and initial position
         self.rect = self.image.get_rect()
-        self.rect.x = random.randint(BOARD_WIDTH + ENEMY_WIDTH, BOARD_WIDTH + DUNGEON_WIDTH - ENEMY_WIDTH)
+        self.rect.x = random.randint(
+            BOARD_WIDTH + ENEMY_WIDTH, BOARD_WIDTH + DUNGEON_WIDTH - ENEMY_WIDTH
+        )
         self.rect.y = random.randint(0, BOARD_HEIGHT - ENEMY_HEIGHT)
-
-        # Enemy attributes based on enemy_type
         self.health = ENEMY_HEALTH[enemy_type]
         self.speed = ENEMY_SPEEDS[enemy_type]
 
+
     def update(self):
-        # Enemy movement
         self.rect.x -= self.speed
 
-        # Check if the enemy is outside the screen
+        if self.rect.left < 0:
+            global enemy_score
+            enemy_score += 1
+            print(f"Enemy Score: {enemy_score}")
+            self.rect.x = random.randint(
+                BOARD_WIDTH + DUNGEON_WIDTH, BOARD_WIDTH + DUNGEON_WIDTH + ENEMY_WIDTH
+            )
+            self.rect.y = random.randint(0, BOARD_HEIGHT - ENEMY_HEIGHT)
+    def spawn_carrot(self):
+        carrot = Carrot(self.rect.x, self.rect.y, in_dungeon=False)
+        carrot_group.add(carrot)
+
+    def kill(self):
+        pygame.event.post(
+            pygame.event.Event(
+                ENEMY_DIE_EVENT,
+                x=self.rect.x,
+                y=self.rect.y,
+            )
+        )
+        super().kill()
+
+    def update(self):
+        self.rect.x -= self.speed
+
+        if self.rect.right < -31:
+            self.handle_farm_raid()
+
         if self.rect.right < 0:
+            self.spawn_carrot()
             self.kill()
 
 
-class Projectile(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+def handle_farm_raid(self):
+    global total_score, farm_raids, enemy_farm_counter, enemy_score
+    total_score -= 1
+    farm_raids += 1
+    enemy_farm_counter += 1
+    enemy_score += 1
+    print(f"Farm raided by: {farm_raids}")
+    print(f"Enemy at farm score: {enemy_score}")
+
+
+class Carrot(pygame.sprite.Sprite):
+    def __init__(self, x, y, in_dungeon):
         super().__init__()
 
-        # Set the projectile image and position
+        self.image = carrot_image
+        self.rect = self.image.get_rect()
+
+        if in_dungeon:
+            # Drop the carrot at the exact coordinates where the enemy died
+            self.rect.topleft = (x, y)
+            carrot_group.add(self)
+        else:
+            self.rect.topleft = (x, y)
+
+        print(f"Carrot spawned at ({self.rect.x}, {self.rect.y})")
+
+class Projectile(pygame.sprite.Sprite):
+    def __init__(self, x, y, in_dungeon):
+        super().__init__()
+
         self.image = pygame.Surface((5, 5))
         self.image.fill(RED)
         self.rect = self.image.get_rect()
-        self.rect.center = (x, y)
 
-        # Projectile speed
+        if in_dungeon:
+            self.rect.x = x + random.randint(0, DUNGEON_WIDTH - 5)
+            self.rect.y = y + random.randint(0, DUNGEON_HEIGHT - 5)
+        else:
+            self.rect.x = x
+            self.rect.y = y
+
         self.speed = 5
 
     def update(self):
-        # Move the projectile
         self.rect.x += self.speed
 
-        # Check if the projectile is outside the screen
         if self.rect.left > BOARD_WIDTH:
             self.kill()
 
+    class Horse(pygame.sprite.Sprite):
+        def __init__(self):
+            super().__init__()
 
-# Create the main character
+            self.image = horse_image
+            self.rect = self.image.get_rect()
+            self.rect.center = (100, 100)
+            self.hunger = 0
+
+        def update(self):
+
+            pass
+
+
 main_character = MainCharacter()
 
-# Create a sprite group to hold the main character
 character_group = pygame.sprite.Group()
 character_group.add(main_character)
 
-# Create a sprite group to hold enemies
 enemy_group = pygame.sprite.Group()
-
-# Create a sprite group to hold projectiles
 projectile_group = pygame.sprite.Group()
 
-# Create a breeding section on the top right of the screen
-breeding_section_width = 100
+breeding_section_width = 200
 breeding_section_height = 100
-breeding_section_color = GREEN
+breeding_section_color = Beige
 breeding_section_rect = pygame.Rect(BOARD_WIDTH - breeding_section_width, 0, breeding_section_width,
-                                    breeding_section_height)
+                                  breeding_section_height)
 
-
-# Create a door on the left side of the screen
 DOOR_WIDTH = 30
 DOOR_HEIGHT = BOARD_HEIGHT
-door_color = BLUE
+door_color = Beige
 door_rect = pygame.Rect(0, 0, DOOR_WIDTH, DOOR_HEIGHT)
 
-# New area (dungeon) properties
 dungeon_area_width = 300
 dungeon_area_height = 300
-dungeon_area_color = (128, 0, 128)  # Purple color
+dungeon_area_color = (128, 0, 128)
 dungeon_area_rect = pygame.Rect(50, 50, dungeon_area_width, dungeon_area_height)
 inside_dungeon = False
-
-
-# Function to create random enemies in the dungeon
 def create_random_enemies():
-    for _ in range(10):
-        enemy_type = random.randint(2, len(enemy_images) - 1)
+    for _ in range(20):
+        enemy_type = random.randint(0, len(enemy_images) - 1)
         enemy = Enemy(enemy_type)
         enemy_group.add(enemy)
 
+def dungeon_game_loop(enemy_score):
+    global inside_dungeon, score
 
-# New area (dungeon) game loop
-def dungeon_game_loop():
-    global inside_dungeon, score  # Use the global variable to control entering/exiting the dungeon area
-
-    create_random_enemies()  # Create random enemies in the dungeon
-
+    create_random_enemies()
     while inside_dungeon:
         for event in pygame.event.get():
             if event.type == QUIT:
-                inside_dungeon = False
                 pygame.quit()
-                quit()
+                sys.exit()
+            elif event.type == ENEMY_DIE_EVENT:
+                carrot = Carrot(event.x, event.y, in_dungeon=True)
+                carrot_group.add(carrot)
 
-        # Get keys that are currently held down
+                # Increment enemy score when a carrot spawns at (-31, BOARD_HEIGHT) in the dungeon
+                if event.x < -31 and event.y == BOARD_HEIGHT:
+                    enemy_score += 1
+                    print(f"Enemy Score in Dungeon: {enemy_score}")
+
         keys = pygame.key.get_pressed()
         dx, dy = 0, 0
         if keys[K_LEFT]:
-            dx = -1.5
+            dx = -2
         if keys[K_RIGHT]:
-            dx = 1.5
+            dx = 2
         if keys[K_UP]:
-            dy = -1.5
+            dy = -2
         if keys[K_DOWN]:
-            dy = 1.5
+            dy = 2
 
         dx, dy = main_character.move(dx, dy)
 
-        # Check if the main character is touching the door to go back to the main area
         if door_rect.colliderect(main_character.rect):
             inside_dungeon = False
-            main_character.rect.x = BOARD_WIDTH - FARMER_WIDTH - 1  # Place the character just outside the door
-            main_character.rect.y = random.randint(0, BOARD_HEIGHT - FARMER_HEIGHT)  # Random Y position
+            main_character.rect.x = BOARD_WIDTH - FARMER_WIDTH - 1
+            main_character.rect.y = random.randint(0, BOARD_HEIGHT - FARMER_HEIGHT)
 
-        # Update the game state
-        character_group.update()
+        # Update enemy positions
         enemy_group.update()
-        projectile_group.update()
 
-        # Check for collisions between enemies and projectiles
+        character_group.update()
+        projectile_group.update()
+        carrot_group.update()
+
+        carrot_collisions = pygame.sprite.spritecollide(main_character, carrot_group, True)
+
+        for carrot in carrot_collisions:
+            main_character.carrot_counter += 1
+
         enemy_hit_dict = pygame.sprite.groupcollide(enemy_group, projectile_group, False, True)
         for enemy, projectiles in enemy_hit_dict.items():
-            # Deal damage to the enemy for each projectile that hit it
             for projectile in projectiles:
-                enemy.health -= 0.25  # Each projectile hits an enemy for 5% of its health
+                enemy.health -= 0.5
                 if enemy.health <= 0:
-                    enemy.kill()  # Remove the enemy from the group
-                    score += 1  # Increment the score by 1 for each enemy killed
+                    enemy.kill()
+                    score += 1
 
-        # Check for shooting in the dungeon
         main_character.shoot()
 
-        # Draw the dungeon area
         screen.fill(dungeon_area_color)
-        screen.blit(dungeon_image, dungeon_area_rect)  # Draw the dungeon layout
+        screen.blit(dungeon_image, dungeon_area_rect)
         character_group.draw(screen)
         enemy_group.draw(screen)
         projectile_group.draw(screen)
+        carrot_group.draw(screen)
 
-
-        # Render the score text in the dungeon area
-        score_text_dungeon = font.render(f"Score: {score}", True, (255, 255, 255))
+        score_text_dungeon = font.render(f"Score: {score}   Carrots: {main_character.carrot_counter}   Enemy Score: {enemy_score}",
+                                         True, (255, 255, 255))
         screen.blit(score_text_dungeon, (10, 10))
 
-        # Update the display
         pygame.display.update()
         clock.tick(60)
 
-
-# Main game loop
+enemy_score = 0  # Initialize enemy_score before the loop
 running = True
+
 while running:
     for event in pygame.event.get():
         if event.type == QUIT:
             running = False
 
-    # Check if the farmer is in the breeding section
+
+    for event in pygame.event.get():
+        if event.type == ENEMY_MOVE_OFFSCREEN_EVENT:
+            enemy_score += 1
+            print(f"Enemy Score: {enemy_score}")
+
+
     if breeding_section_rect.colliderect(main_character.rect):
         inside_dungeon = True
-        main_character.rect.x = DOOR_WIDTH  # Place the character just outside the door
-        main_character.rect.y = random.randint(0, BOARD_HEIGHT - FARMER_HEIGHT)  # Random Y position
+        main_character.rect.x = DOOR_WIDTH
+        main_character.rect.y = random.randint(0, BOARD_HEIGHT - FARMER_HEIGHT)
 
-    # Get keys that are currently held down
+        # Check if horse is already in the breeding section
+        horse_already_present = any(isinstance(sprite, Horse) for sprite in character_group)
+
+        if not horse_already_present:
+            # Subtract 1 carrot from the counter
+            if main_character.carrot_counter > 0:
+                main_character.carrot_counter -= 1
+
+                # Add a new horse to the breeding section
+                horse = Horse()
+                horse.rect.center = (BOARD_WIDTH - breeding_section_width // 2, breeding_section_height // 2)
+                character_group.add(horse)
+
     keys = pygame.key.get_pressed()
     dx, dy = 0, 0
     if keys[K_LEFT]:
-        dx = -1
+        dx = -2
     if keys[K_RIGHT]:
-        dx = 1
+        dx = 2
     if keys[K_UP]:
-        dy = -1
+        dy = -2
     if keys[K_DOWN]:
-        dy = 1
+        dy = 2
 
     dx, dy = main_character.move(dx, dy)
 
-    # Check for shooting in the main area
     main_character.shoot()
 
-    # Update the game state
+    carrot_group.update()
+    carrot_group.draw(screen)
     character_group.update()
     enemy_group.update()
     projectile_group.update()
 
-    # Check for collisions between enemies and projectiles
     enemy_hit_dict = pygame.sprite.groupcollide(enemy_group, projectile_group, False, True)
     for enemy, projectiles in enemy_hit_dict.items():
-        # Deal damage to the enemy for each projectile that hit it
         for projectile in projectiles:
-            enemy.health -= 0.05  # Each projectile hits an enemy for 5% of its health
+            enemy.health -= 0.5
             if enemy.health <= 0:
-                enemy.kill()  # Remove the enemy from the group
-                score += 1  # Increment the score by 1 for each enemy killed
+                enemy.kill()
+                score += 1
 
-    # Draw the game elements
-    screen.fill(BLUE)  # Fill the screen with blue color
+                # Check if the enemy reached -31 and handle farm raid
+                if enemy.rect.right < -31:
+                    enemy.handle_farm_raid()
 
-    # Draw the door on the left side
+    # Check for game over condition based on enemy's score
+    if enemy_score >= 10000:
+        print("You lose!")
+        pygame.quit()
+        sys.exit()
+
+    screen.fill(Beige)
     pygame.draw.rect(screen, door_color, door_rect)
-
-    # Draw the breeding section
     pygame.draw.rect(screen, breeding_section_color, breeding_section_rect)
-
-
-
     character_group.draw(screen)
     enemy_group.draw(screen)
     projectile_group.draw(screen)
 
-    # Render the score text in the main area
-    score_text_main = font.render(f"Score: {score}", True, (255, 255, 255))
+    # Draw the mine image in the breeding section
+    mine_rect = mine_image.get_rect(center=(BOARD_WIDTH - breeding_section_width // 2, breeding_section_height // 2))
+    screen.blit(mine_image, mine_rect)
+
+    # Draw the horse pen image in the middle of the breeding section
+    horse_pen_rect = horse_pen_image.get_rect(center=(BOARD_WIDTH - breeding_section_width, BOARD_HEIGHT / 2))
+    screen.blit(horse_pen_image, horse_pen_rect)
+
+    score_text_main = font.render(f"Score: {score}   Carrots: {main_character.carrot_counter}   Enemy Score: {enemy_score}",
+                                  True, (255, 255, 255))
     screen.blit(score_text_main, (10, 10))
 
-    # If inside the dungeon, run the dungeon game loop
     if inside_dungeon:
-        dungeon_game_loop()
+        dungeon_game_loop(enemy_score)
 
-        # Check if the player's score has reached 10
-        if score >= 1000:
-            running = False  # Close the game if score is 10 or higher
-
-    # Update the display
     pygame.display.update()
     clock.tick(60)
 
-
-
-if door_rect.colliderect(main_character.rect):
-    inside_farm = False
-    main_character.rect.x = BOARD_WIDTH - FARMER_WIDTH - 1  # Place the character just outside the door
-    main_character.rect.y = random.randint(0, BOARD_HEIGHT - FARMER_HEIGHT)  # Random Y position
-
-# Quit Pygame
 pygame.quit()
+sys.exit()
+
